@@ -171,7 +171,7 @@ def send_users():
                 request = event.text.lower()
                 if request == 'да':
                     for user in users_url:
-                        if not users_url[i][0]:
+                        if users_url[i][0] not in shown_users_table.c.user_url:
                             write_msg(event.user_id, users_url[i][0])
                             vk.method('messages.send', {
                                 'user_id': event.user_id,
