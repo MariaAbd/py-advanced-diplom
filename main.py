@@ -6,8 +6,8 @@ from sqlalchemy import MetaData, Table, func, Column, String, Integer, ForeignKe
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
-token_bot = '9040ed7a6d4821bf049f5aece2244da6840e19996d01ae129adf64b4b35b83207cc97f0ab49f5340c93fc'
-token_vk = 'ff35a0d052695946c32940f65dfc55a1647fb6dd8e50a25a1150268d5c5fc51a5f524625ba983c41a5fe7'
+token_bot = ''
+token_vk = ''
 
 vk = vk_api.VkApi(token=token_bot)
 users = vk_api.VkApi(token=token_vk)
