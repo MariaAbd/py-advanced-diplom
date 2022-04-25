@@ -1,14 +1,39 @@
 from random import randrange
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
+import sqlalchemy as sq
+from sqlalchemy import MetaData, Table, func, Column, String, Integer, ForeignKey, Numeric, select, desc
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
 
-token_bot = ''
-token_vk = ''
+token_bot = '9040ed7a6d4821bf049f5aece2244da6840e19996d01ae129adf64b4b35b83207cc97f0ab49f5340c93fc'
+token_vk = 'ff35a0d052695946c32940f65dfc55a1647fb6dd8e50a25a1150268d5c5fc51a5f524625ba983c41a5fe7'
 
 vk = vk_api.VkApi(token=token_bot)
 users = vk_api.VkApi(token=token_vk)
 
 longpoll = VkLongPoll(vk)
+
+Base = declarative_base()
+
+engine = sq.create_engine('postgresql://postgres:Artem_Arya0315SQL@localhost:5432/py_48')
+connection = engine.connect()
+Session = sessionmaker(bind=engine)
+session = Session()
+meta = MetaData(bind=engine)
+
+users_table = Table(
+    'users_table', meta,
+    Column('user_url', String, primary_key=True),
+    Column('photo_1', String, nullable=False)
+)
+
+shown_users_table = Table(
+    'shown_users_table', meta,
+    Column('user_url', String, ForeignKey('users_table.user_url'), primary_key=True)
+)
+
+meta.create_all(engine)
 
 
 def write_msg(user_id, message):
@@ -66,16 +91,14 @@ def get_sex():
                 sex = event.text.lower()
                 if sex == 'мужчина':
                     sex = 2
-                    # write_msg(event.user_id, sex)
                 elif sex == 'женщина':
                     sex = 1
-                    # write_msg(event.user_id, sex)
                 else:
                     write_msg(event.user_id, 'Необходимо написать "мужчина" или "женщина" ')
                     print()
                     get_sex()
 
-                write_msg(event.user_id, 'Есть несколько подходящих людей. Хотите получить фотографии и ссылки на них?')
+                write_msg(event.user_id, 'Есть несколько подходящих людей. Отправить фотографии и ссылку?')
                 return sex
 
 
@@ -89,8 +112,8 @@ def search_users():
         'is_closed': 'False',
         'count': 100,
         'fields': 'city, country, relation, photo_max, bdate',
-        'age_from': age[0],
-        'age_to': age[1],
+        'age_from': int(age[0]),
+        'age_to': int(age[1]),
         'city': get_city(),
         'sex': get_sex(),
         'status': 1 or 6,
@@ -99,41 +122,81 @@ def search_users():
 
     responce = users.method('users.search', params)
     users_list.append(responce)
-
     for ids in users_list[0]['items']:
+        # print(ids)
         if not ids['is_closed']:
-
             user_info = users.method('photos.getProfile', {
                 'owner_id': ids['id'],
                 'album_id': 'profile',
                 'extended': 1,
                 'fields': 'photo'})
-            user_photo = []
 
-            for photo in user_info['items']:
-                likes_coms = int(photo['comments']['count'] + photo['likes']['count'])
-                user_photo.append({'likes': likes_coms,
-                                   'url': photo['sizes'][-1]['url']})
-            best_photos = sorted(user_photo, key=lambda k: k['likes'])
-            photos_list.append([url + str(photo['owner_id']), best_photos[-3:]])
+            user_photo = []
+            if user_info['count'] >= 3:
+                for photo in user_info['items']:
+                    likes_coms = int(photo['comments']['count'] + photo['likes']['count'])
+                    user_photo.append({'id': photo['id'],
+                                       'likes': likes_coms,
+                                       'url': photo['sizes'][-1]['url']})
+                best_photos = sorted(user_photo, key=lambda k: k['likes'])
+                photos_list.append([url + str(photo['owner_id']),
+                                    'photo{}_{}'.format(photo['owner_id'], best_photos[-1]['id']),
+                                    'photo{}_{}'.format(photo['owner_id'], best_photos[-2]['id']),
+                                    'photo{}_{}'.format(photo['owner_id'], best_photos[-3]['id'])
+                                    ])
+
     return photos_list
 
 
 users_url = search_users()
-print(users_url)
+# print(users_url)
+
+
+def save_users_in_database():
+    i = int()
+    for user in users_url:
+        connection.execute(users_table.insert(), {'user_url': users_url[i][0], 'photo_1': users_url[i][1]})
+        i += 1
+    return users_table
+
+
+# save_users_in_database()
 
 
 def send_users():
+    i = int()
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW:
             if event.to_me:
                 request = event.text.lower()
                 if request == 'да':
-                    write_msg(event.user_id, users_url)
+                    for user in users_url:
+                        if not users_url[i][0]:
+                            write_msg(event.user_id, users_url[i][0])
+                            vk.method('messages.send', {
+                                'user_id': event.user_id,
+                                'attachment': users_url[i][1],
+                                'random_id': randrange(10 ** 7)})
+                            vk.method('messages.send', {
+                                'user_id': event.user_id,
+                                'attachment': users_url[i][2],
+                                'random_id': randrange(10 ** 7)})
+                            vk.method('messages.send', {
+                                'user_id': event.user_id,
+                                'attachment': users_url[i][3],
+                                'random_id': randrange(10 ** 7)})
+                            write_msg(event.user_id, 'Отправить ещё?')
+                            connection.execute(shown_users_table.insert(), {'user_url': users_url[i][0]})
+                            i += 1
+                            break
+                        else:
+                            print(user)
+                            i += 1
+                else:
+                    write_msg(event.user_id, 'пока :)')
 
 
 send_users()
-
 
 # def get_age_from():
 #     for event in longpoll.listen():
